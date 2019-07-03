@@ -64,7 +64,7 @@ if root == '' or not os.path.exists(repo):
 
 for line in open("/proc/mounts").readlines():
     mnt = line.split()
-    if '/boot' == mnt[1]:
+    if root == mnt[1]:
         part = mnt[0]
         break
 
@@ -72,6 +72,7 @@ if part == '':
     print("No such mount point: ", root)
     exit(1)
 
+# print("part0:", part)
 # FIXME: sdXN, mmcMpN, nvmeMpN
 disk = re.sub('\d+$', '', part)
 # index = part.replace(disk, '')
@@ -130,7 +131,7 @@ grub_cfg = None
 for grub in ['grub', 'grub2']:
     grub_cmd = grub + '-install'
     if shutil.which(grub_cmd) != None:
-        grub_cfg = boot_dir + '/' + grub + '/grub.cfg'
+        grub_cfg = boot + '/' + grub + '/grub.cfg'
         break
 
 if grub_cfg == None:
@@ -154,11 +155,12 @@ if pttype == 'gpt':
         print("ESP partition not found!")
         exit(1)
 
-    for part in os.listdir('/dev'):
-        if re.match(disk + '\d+', part): # or + '\d+p\d+'
-            subprocess.call('umount ' + part)
+    # for part in os.listdir('/dev'):
+    #     _part = '/dev/' + _part
+    #     if re.match(disk + '\d+', part): # or + '\d+p\d+'
+    #         subprocess.call('umount ' + _part, shell=True)
 
-    efi_dir = boot_dir + '/efi'
+    efi_dir = boot + '/efi'
     if not os.path.exists(efi_dir):
         os.mkdir(efi_dir)
     subprocess.call('mount {}{} {}'.format(disk, esp, efi_dir), shell=True)
@@ -166,21 +168,28 @@ else:
 	grub_cmd += ' --target=i386-pc'
 
 for g in ['grub', 'grub2']:
-    grub_dir = boot_dir + '/' + g
+    grub_dir = boot + '/' + g
     if os.path.exists(grub_dir):
         shutil.rmtree(grub_dir)
 
-subprocess.call("{} --removable --boot-directory={} {}".format(grub_cmd, boot_dir, disk), shell=True)
+subprocess.call("{} --removable --boot-directory={} {}".format(grub_cmd, boot, disk), shell=True)
 
 print("Generating {} ...".format(grub_cfg))
 
 cf = open(grub_cfg, 'w')
 
-configs = ['GRUB_TIMEOUT=5', 'insmod ext2', 'insmod all_video']
+configs = [
+    'GRUB_TIMEOUT=5', 
+    'insmod ext2', 
+    'insmod all_video'
+]
+
 if pttype == 'gpt':
     configs.append('insmod part_gpt')
 
-cf.writelines(configs)
+for line in configs:
+    cf.write(line + '\n')
+cf.write('\n')
 
 for iso in iso_list:
     iso_rel = iso.lstrip(root)
@@ -189,8 +198,10 @@ for iso in iso_list:
     print("{} ({})".format(label, iso_rel))
 
     if linux_dist(iso) == 'redhat':
+        # print("part:" + part)
         uuid = blk_tag('UUID', part)
-        linux="isolinux/vmlinuz repo=hd:UUID={}:{}".format(uuid, iso_dir.lstrip(root))
+        # print("uuid:" , uuid)
+        linux="isolinux/vmlinuz repo=hd:UUID={}:/iso/".format(uuid)
         initrd="isolinux/initrd.img"
     elif linux_dist(iso) == 'debian':
         linux="casper/vmlinuz.efi boot=casper iso-scan/filename=" + iso_rel
@@ -200,14 +211,25 @@ for iso in iso_list:
         continue
 
     menuentry = [
-        "menuentry 'Install " + label + " {",
+        "menuentry 'Install " + label + " '{",
         "    set root='hd0,{}'".format(index),
-        "    loopback lo {}".format(iso_rel),
+        "    loopback lo /{}".format(iso_rel),
         "    linux (lo)/{}".format(linux),
         "    initrd (lo)/{}".format(initrd),
         "}"
     ]
-    cf.writelines(menuentry)
+    
+    for line in menuentry:
+        cf.write(line + '\n')
+
+cf.close()
+    
+    for line in menuentry:
+        cf.write(line + '\n')
+
+cf.close()
 
 if pttype == 'gpt':
-    subprocess.call('umount {}/efi'.format(boot_dir), shell=True)
+    subprocess.call('umount {}/efi'.format(boot), shell=True)
+if pttype == 'gpt':
+    subprocess.call('umount {}/efi'.format(boot), shell=True)
