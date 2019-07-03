@@ -37,11 +37,11 @@ def linux_dist(iso):
     for dist in dist_serial:
         if label.startswith(dist):
             return dist_serial[dist]
-return None
+    return None
 
 parse = OptionParser()
 parse.add_option('-p', '--isopath', dest='isopath', help='iso image path')
-parse.add_option('-m', '--volume', dest='mount point', help='mount point')
+parse.add_option('-m', '--volume', dest='volume', help='mount point')
 
 (opts, args) = parse.parse_args()
 
